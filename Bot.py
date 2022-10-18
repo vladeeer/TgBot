@@ -14,11 +14,12 @@ SERVICE_ACCOUNT_FILE = os.path.join(BASE_DIR, 'credentials.json')
 googleCredentials = service_account.Credentials.from_service_account_file(
 				SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 
-def log_message(name, text, logToConsole = True):
-	if (logToConsole): 
-		print(text)
-	for log_chat in C.LOG_CHATS:
-		dp.bot.send_message(chat_id=log_chat, text=(name + ": " + text + "\n"))
+def log_message(name, text, logToTg = True):
+	if (logToTg): 
+		for log_chat in C.LOG_CHATS:
+			dp.bot.send_message(chat_id=log_chat, text=(name + ": " + text + "\n"))
+	print(text)
+	
 
 def start_command(update, context):
 	log_message(update.message.from_user.first_name + " " + ("" if update.message.from_user.last_name is None else str(update.message.from_user.last_name)) + " [" + str(update.message.from_user.id) + "]", "Joined chat")
@@ -35,11 +36,13 @@ def handle_message(update, context):
 		text=str(update.message.text).lower()
 		log_message(update.message.from_user.first_name, update.message.text, False)
 
-		resp = F.message_responses(text, update.message.from_user.first_name, googleCredentials)
+		resp = F.message_responses(text, update.message.from_user.first_name, googleCredentials, update.message.from_user.id)
+		if resp[0]:
+			log_message("Bot", resp[0], False)
+			update.message.reply_text(resp[0])
 		if resp[1]:
-			log_message("[Server]", resp[1])
-		log_message("Bot", resp[0])
-		update.message.reply_text(resp[0])
+			log_message("[Server]", resp[1])	
+		
 	
 	elif (update.edited_message != None):
 		log_message("Bot", "Редактирование сообщений не изменяет внесённых данных", False)
