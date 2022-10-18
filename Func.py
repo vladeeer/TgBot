@@ -21,12 +21,17 @@ def message_responses(input_text, user_name, credentials = None, userId = 0):
 
 	elif(lookFor(['select'], user_message)):
 		inp = user_message.split(' ')
-		result = Sheets.getLineById(credentials, inp[1], userId)
-		if not result[2]:
-			resp[0] = f"Выделена строка {inp[1]} ({result[1]})"
+		result = [{'sheet':'', 'row':0, 'id':0}, '', '']
+		if len(inp) != 2:
+			resp[0] = f"Не удалось выделить строку. Допущена ошибка в команде"
+			resp[1] = f'Failed to get a line by id. Invalid syntax'
 		else:
-			resp[0] = f"Не удалось выделить строку. {result[1]}"
-			resp[1] = f'Failed to get a line by id.\n{result[2]}'
+			result = Sheets.getLineById(credentials, inp[1], userId)
+			if not result[2]:
+				resp[0] = f"Выделена строка {inp[1]} ({result[1]})"
+			else:
+				resp[0] = f"Не удалось выделить строку. {result[1]}"
+				resp[1] = f'Failed to get a line by id.\n{result[2]}'
 
 
 	if (not resp[0]) and (not resp[1]):
