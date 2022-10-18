@@ -6,6 +6,14 @@ from google.oauth2 import service_account
 import Const as C
 import Func as F
 
+# Set Up And Get Credentials For APIs
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets','https://www.googleapis.com/auth/drive.metadata']
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SERVICE_ACCOUNT_FILE = os.path.join(BASE_DIR, 'credentials.json')
+
+googleCredentials = service_account.Credentials.from_service_account_file(
+				SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+
 def log_message(name, text, logToConsole = True):
 	if (logToConsole): 
 		print(text)
@@ -27,7 +35,7 @@ def handle_message(update, context):
 		text=str(update.message.text).lower()
 		log_message(update.message.from_user.first_name, update.message.text, False)
 
-		resp = F.message_responses(text, update.message.from_user.first_name)
+		resp = F.message_responses(text, update.message.from_user.first_name, googleCredentials)
 		if resp[1]:
 			log_message("[Server]", resp[1])
 		log_message("Bot", resp[0])
@@ -58,14 +66,6 @@ def main():
 	dp.add_error_handler(error)
 
 	log_message("Bot", "Bot started")   
-
-	# Set Up Google Auth
-	SCOPES = ['https://www.googleapis.com/auth/spreadsheets','https://www.googleapis.com/auth/drive.metadata']
-	BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-	SERVICE_ACCOUNT_FILE = os.path.join(BASE_DIR, 'credentials.json')
-
-	credentials = service_account.Credentials.from_service_account_file(
-				  SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 
 	# Start Bot
 	updater.start_polling()

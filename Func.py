@@ -1,3 +1,4 @@
+from asyncio.windows_events import NULL
 import random
 from datetime import datetime
 
@@ -7,13 +8,13 @@ import Sheets
 def lookFor(a,b):
 	return (lambda a, b : any(i in b for i in a))(a, b)
 
-def message_responses(input_text, user_name):
+def message_responses(input_text, user_name, credentials = NULL):
 	user_message = str(input_text).lower()
 	resp = ['','']
 	print(str(user_name) + ": " + str(input_text))
 
 	if(lookFor(['update'], user_message)):
-		error = Sheets.fetchFiles()
+		error = Sheets.fetchFiles(credentials)
 		if not error:
 			resp[0] = "Перечень файлов обновлён"
 		else:
