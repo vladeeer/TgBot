@@ -68,7 +68,7 @@ def getLineById(credentials, id, userId = 0, sheet = None):
 		if not sheet:
 			sheet = build('sheets', 'v4', credentials=credentials).spreadsheets()
 
-		# Get non-First Sheet Names and Sizes
+		# Get non-First Sheet Names
 		result = sheet.get(spreadsheetId=C.REG_ID,
 						   fields='sheets(properties(title,sheetId))').execute()
 		names = [result.get('sheets')[i].get('properties').get('title') for i in range(1, len(result.get('sheets')))]
@@ -81,7 +81,9 @@ def getLineById(credentials, id, userId = 0, sheet = None):
 			result = sheet.values().get(spreadsheetId=C.REG_ID, 
 										range=f"'{names[i]}'!S4:S",
 										fields='values').execute()
-			array = [i[0] for i in result.get('values')]
+			if not result.get('values'):
+				continue
+			array = [i[0] for i in result.get('values') if len(i)]
 			try:
 				foundRow = 3 + 1 + array.index(id)
 				foundSheet = names[i]
@@ -97,10 +99,14 @@ def getLineById(credentials, id, userId = 0, sheet = None):
 			return [{'sheet':foundSheet, 'row':foundRow, 'id':int(id)}, f'\'{foundSheet}\':{foundRow}','']
 
 		# Get User's Row
-		userRow = getUserRow(credentials, userId, sheet)
+		res = getUserRow(credentials, userId, sheet)
+		userRow = res[0]
+		if res[1]:
+			return [{'sheet':'', 'row':0, 'id':0}, '', f'{res[1]}']
+
 		if not userRow:
 			return [{'sheet':'', 'row':0, 'id':0}, 'Недостаточно прав для доступа', f'Попытка доступа {userId}']
-
+		
 		# Update Users Sheet
 		userData = [[f'\'{foundSheet}\'', foundRow, str(id)]]
 		sheet.values().update(spreadsheetId=C.USERS_ID, range=f'D2:F2', 
@@ -113,41 +119,232 @@ def getLineById(credentials, id, userId = 0, sheet = None):
 		return [{'sheet':'', 'row':0, 'id':0}, '', str(err)]
 
 def getUserRow(credentials, userId, sheet = None):
-	# Get Sheets Service
-	if not sheet:
-			sheet = build('sheets', 'v4', credentials=credentials).spreadsheets()
-
-	# Find Current User's Line
-	userRow = -1
-
-	result = sheet.values().get(spreadsheetId=C.USERS_ID, 
-									range="A2:A",
-									fields='values').execute()
-	array = [i[0] for i in result.get('values')]
 	try:
-		userRow = 1 + 1 + array.index(str(userId))
-	except ValueError:
-		return None
+		# Get Sheets Service
+		if not sheet:
+				sheet = build('sheets', 'v4', credentials=credentials).spreadsheets()
 
-	return userRow
+		# Find Current User's Line
+		userRow = -1
+
+		result = sheet.values().get(spreadsheetId=C.USERS_ID, 
+										range="A2:A",
+										fields='values').execute()
+		array = [i[0] for i in result.get('values')]
+		try:
+			userRow = 1 + 1 + array.index(str(userId))
+		except ValueError as err:
+			return [None, '']
+
+		return [userRow, '']
+
+	except HttpError:
+		return [None, str(err)]
 
 def getUserData(credentials, userId, sheet = None):
-	# Get Sheets Service
-	if not sheet:
-			sheet = build('sheets', 'v4', credentials=credentials).spreadsheets()
+	try:
+		# Get Sheets Service
+		if not sheet:
+				sheet = build('sheets', 'v4', credentials=credentials).spreadsheets()
 
-	# Get User Row
-	userRow = getUserRow(credentials, userId, sheet)
-	if not userRow:
-		return None
+		# Get User Row
+		res = getUserRow(credentials, userId, sheet)
+		userRow = res[0]
+		if res[1]:
+			return [None, res[1]]
 
-	# Get User's Line
-	result = sheet.values().get(spreadsheetId=C.USERS_ID, 
-								range=f"A{userRow}:E{userRow}",
-								fields='values').execute()
+		if not userRow:
+			return [None, '']
+
+		# Get User's Line
+		result = sheet.values().get(spreadsheetId=C.USERS_ID, 
+									range=f"A{userRow}:E{userRow}",
+									fields='values').execute()
+
+	except HttpError as err:
+		return [None, str(err)]
 
 	return result.get('values')
 
+def getFreeId(credentials, sheet = None):
+	try:
+		# Get Sheets Service
+		if not sheet:
+			sheet = build('sheets', 'v4', credentials=credentials).spreadsheets()
+
+		# Get non-First Sheet Names
+		result = sheet.get(spreadsheetId=C.REG_ID,
+						   fields='sheets(properties(title,sheetId))').execute()
+		names = [result.get('sheets')[i].get('properties').get('title') for i in range(1, len(result.get('sheets')))]
+
+		# Get Sorted List of Ids
+		ids = []
+		for i in range(0, len(names)):  # TODO Use BatchGet
+				result = sheet.values().get(spreadsheetId=C.REG_ID, 
+											range=f"'{names[i]}'!S4:S",
+											fields='values').execute()
+				if not result.get('values'):
+					continue
+				array = [int(i[0]) for i in result.get('values') if len(i)]
+				ids.extend(array)
+		
+		ids.sort()
+
+		# Get Missing/Next Id
+		if len(ids) == 0:
+			return [1, '']
+
+		if len(ids) == 1:
+			return [ids[0] + 1, '']
+
+		for i in range(0, len(ids)):
+			if ids[i] != i + 1:
+				return [i + 1, '']
+		return [ids[len(ids)-1] + 1, '']
+
+	except HttpError as err:
+		return [None, str(err)]
+
+def addRow(credentials, sheetId, sheet = None):
+	try:
+		# Get Sheets Service
+		if not sheet:
+			sheet = build('sheets', 'v4', credentials=credentials).spreadsheets()
+
+		# Get non-First Sheet Names
+		result = sheet.get(spreadsheetId=C.REG_ID,
+						   fields='sheets(properties(title,sheetId))').execute()
+		names = [result.get('sheets')[i].get('properties').get('title') for i in range(1, len(result.get('sheets')))]
+		sheetIds2 = [result.get('sheets')[i].get('properties').get('sheetId') for i in range(1, len(result.get('sheets')))]  
+		name = names[sheetId-1]
+		sheetId2 = sheetIds2[sheetId-1]
+		
+
+		# Get New Id
+		res = getFreeId(credentials, sheet)
+		lineId = str(res[0])
+		if res[1]:
+			return ['', res[1]]
+
+		# Get Next Row
+		result = sheet.values().get(spreadsheetId=C.REG_ID,
+									range=f"'{name}'!S4:S",
+									fields='values').execute()
+		lineRow = 4 + len(result.get('values'))
+
+
+		# Get Next Line
+		lineData = ['']*20; lineData[18] = lineId
+		sheet.values().update(spreadsheetId=C.REG_ID, range=f"'{name}'!A{lineRow}:T{lineRow}", 
+							  valueInputOption='USER_ENTERED',
+							  body={'values': [lineData]}).execute()
+
+		# Copy Formating From Row 1
+		body = {"requests": [{
+			"copyPaste": {
+				"source": {
+					"sheetId": sheetId2,
+					"startRowIndex": 3,
+					"endRowIndex": 4,
+					"startColumnIndex": 0,
+					"endColumnIndex": 20
+				},
+				"destination": {
+					"sheetId": sheetId2,
+					"startRowIndex": lineRow-1,
+					"endRowIndex": lineRow,
+					"startColumnIndex": 0,
+					"endColumnIndex": 20
+				},
+				"pasteType": "PASTE_FORMAT"
+			}
+		}]}
+		result = sheet.batchUpdate(spreadsheetId=C.REG_ID, body=body).execute()
+
+		# Copy Formualas From Row 1
+		body = {"requests": [{
+			"copyPaste": {
+				"source": {
+					"sheetId": sheetId2,
+					"startRowIndex": 3,
+					"endRowIndex": 4,
+					"startColumnIndex": 6,
+					"endColumnIndex": 7
+				},
+				"destination": {
+					"sheetId": sheetId2,
+					"startRowIndex": lineRow-1,
+					"endRowIndex": lineRow,
+					"startColumnIndex": 6,
+					"endColumnIndex": 7
+				},
+				"pasteType": "PASTE_FORMULA"
+			}
+		},
+		{
+			"copyPaste": {
+				"source": {
+					"sheetId": sheetId2,
+					"startRowIndex": 3,
+					"endRowIndex": 4,
+					"startColumnIndex": 8,
+					"endColumnIndex": 9
+				},
+				"destination": {
+					"sheetId": sheetId2,
+					"startRowIndex": lineRow-1,
+					"endRowIndex": lineRow,
+					"startColumnIndex": 8,
+					"endColumnIndex": 9
+				},
+				"pasteType": "PASTE_FORMULA"
+			}
+		},
+		{
+			"copyPaste": {
+				"source": {
+					"sheetId": sheetId2,
+					"startRowIndex": 3,
+					"endRowIndex": 4,
+					"startColumnIndex": 13,
+					"endColumnIndex": 14
+				},
+				"destination": {
+					"sheetId": sheetId2,
+					"startRowIndex": lineRow-1,
+					"endRowIndex": lineRow,
+					"startColumnIndex": 13,
+					"endColumnIndex": 14
+				},
+				"pasteType": "PASTE_FORMULA"
+			}
+		},
+		{
+			"copyPaste": {
+				"source": {
+					"sheetId": sheetId2,
+					"startRowIndex": 3,
+					"endRowIndex": 4,
+					"startColumnIndex": 15,
+					"endColumnIndex": 16
+				},
+				"destination": {
+					"sheetId": sheetId2,
+					"startRowIndex": lineRow-1,
+					"endRowIndex": lineRow,
+					"startColumnIndex": 15,
+					"endColumnIndex": 16
+				},
+				"pasteType": "PASTE_FORMULA"
+				}
+		}]}
+		result = sheet.batchUpdate(spreadsheetId=C.REG_ID, body=body).execute()
+
+		return [f'{lineId}', '']
+
+	except HttpError as err:
+		return ['', str(err)]
+	
 	
 
 

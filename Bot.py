@@ -18,7 +18,7 @@ def log_message(name, text, logToTg = True):
 	if (logToTg): 
 		for log_chat in C.LOG_CHATS:
 			dp.bot.send_message(chat_id=log_chat, text=(name + ": " + text + "\n"))
-	print(text)
+	print(name + ": " + text)
 	
 
 def start_command(update, context):
@@ -32,7 +32,7 @@ def help_command(update, context):
 	update.message.reply_text("TODO Инструкция")
 
 def handle_message(update, context):
-	if (update.message != None):
+	if (update.message != None and update.message.from_user.id in C.VALID_IDS):
 		text=str(update.message.text).lower()
 		log_message(update.message.from_user.first_name, update.message.text, False)
 
