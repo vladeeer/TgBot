@@ -60,7 +60,9 @@ def fetchFiles(credentials):
 		#print(result.get('values'))
 
 	except HttpError as err:
-		return str(err)
+		if err.resp.reason == 'Too Many Requests':
+			return ['. Превышен лимит запросов, подождите 60 секунд', str(err)]
+		return ['', str(err)]
 
 def getLineById(credentials, id, userId = 0, sheet = None):
 	try:
@@ -96,7 +98,7 @@ def getLineById(credentials, id, userId = 0, sheet = None):
 
 		# Return if no User Specified else write selection to USERS_ID
 		if (userId == 0):
-			return [{'sheet':foundSheet, 'row':foundRow, 'id':int(id)}, f'\'{foundSheet}\':{foundRow}','']
+			return [{'sheet':foundSheet, 'row':foundRow, 'id':int(id)}, f'\'{foundSheet}\'!{foundRow}','']
 
 		# Get User's Row
 		res = getUserRow(credentials, userId, sheet)
@@ -108,14 +110,16 @@ def getLineById(credentials, id, userId = 0, sheet = None):
 			return [{'sheet':'', 'row':0, 'id':0}, 'Недостаточно прав для доступа', f'Попытка доступа {userId}']
 		
 		# Update Users Sheet
-		userData = [[f'\'{foundSheet}\'', foundRow, str(id)]]
+		userData = [[f'\'\'{foundSheet}\'', foundRow, str(id)]]
 		sheet.values().update(spreadsheetId=C.USERS_ID, range=f'D2:F2', 
 							  valueInputOption='USER_ENTERED',
 							  body={'values': userData}).execute()
 
-		return [{'sheet':foundSheet, 'row':int(foundRow), 'id':int(id)}, f'\'{foundSheet}\':{foundRow}', '']
+		return [{'sheet':foundSheet, 'row':int(foundRow), 'id':int(id)}, f'\'{foundSheet}\'!{foundRow}', '']
 
 	except HttpError as err:
+		if err.resp.reason == 'Too Many Requests':
+			return [{'sheet':'', 'row':0, 'id':0}, 'Превышен лимит запросов, подождите 60 секунд', str(err)]
 		return [{'sheet':'', 'row':0, 'id':0}, '', str(err)]
 
 def getUserRow(credentials, userId, sheet = None):
@@ -133,13 +137,15 @@ def getUserRow(credentials, userId, sheet = None):
 		array = [i[0] for i in result.get('values')]
 		try:
 			userRow = 1 + 1 + array.index(str(userId))
-		except ValueError as err:
-			return [None, '']
+		except ValueError:
+			return [None, '', '']
 
-		return [userRow, '']
+		return [userRow, '', '']
 
-	except HttpError:
-		return [None, str(err)]
+	except HttpError as err:
+		if err.resp.reason == 'Too Many Requests':
+			return [None, 'Превышен лимит запросов, подождите 60 секунд', str(err)]
+		return [None, '', str(err)]
 
 def getUserData(credentials, userId, sheet = None):
 	try:
@@ -150,21 +156,26 @@ def getUserData(credentials, userId, sheet = None):
 		# Get User Row
 		res = getUserRow(credentials, userId, sheet)
 		userRow = res[0]
-		if res[1]:
-			return [None, res[1]]
+		if res[1] or res[2]:
+			return [None, res[1], res[2]]
 
 		if not userRow:
-			return [None, '']
+			return [None, '', '']
 
 		# Get User's Line
 		result = sheet.values().get(spreadsheetId=C.USERS_ID, 
-									range=f"A{userRow}:E{userRow}",
+									range=f"A{userRow}:F{userRow}",
 									fields='values').execute()
+		if not result.get('values'):
+			return [None, 'No Users In Users Sheet', '']
+
+		print(result.get('values')[0])
+		return [result.get('values')[0], '', '']
 
 	except HttpError as err:
-		return [None, str(err)]
-
-	return result.get('values')
+		if err.resp.reason == 'Too Many Requests':
+			return [None, 'Превышен лимит запросов, подождите 60 секунд', str(err)]
+		return [None, '', str(err)]
 
 def getFreeId(credentials, sheet = None):
 	try:
@@ -192,18 +203,20 @@ def getFreeId(credentials, sheet = None):
 
 		# Get Missing/Next Id
 		if len(ids) == 0:
-			return [1, '']
+			return [1, '', '']
 
 		if len(ids) == 1:
-			return [ids[0] + 1, '']
+			return [ids[0] + 1, '', '']
 
 		for i in range(0, len(ids)):
 			if ids[i] != i + 1:
-				return [i + 1, '']
-		return [ids[len(ids)-1] + 1, '']
+				return [i + 1, '', '']
+		return [ids[len(ids)-1] + 1, '', '']
 
 	except HttpError as err:
-		return [None, str(err)]
+		if err.resp.reason == 'Too Many Requests':
+			return [None, 'Превышен лимит запросов, подождите 60 секунд', str(err)]
+		return [None, '', str(err)]
 
 def addRow(credentials, sheetId, sheet = None):
 	try:
@@ -223,8 +236,8 @@ def addRow(credentials, sheetId, sheet = None):
 		# Get New Id
 		res = getFreeId(credentials, sheet)
 		lineId = str(res[0])
-		if res[1]:
-			return ['', res[1]]
+		if res[1] or res[2]:
+			return ['', res[1], res[2]]
 
 		# Get Next Row
 		result = sheet.values().get(spreadsheetId=C.REG_ID,
@@ -261,89 +274,111 @@ def addRow(credentials, sheetId, sheet = None):
 		}]}
 		result = sheet.batchUpdate(spreadsheetId=C.REG_ID, body=body).execute()
 
-		# Copy Formualas From Row 1
-		body = {"requests": [{
-			"copyPaste": {
-				"source": {
-					"sheetId": sheetId2,
-					"startRowIndex": 3,
-					"endRowIndex": 4,
-					"startColumnIndex": 6,
-					"endColumnIndex": 7
-				},
-				"destination": {
-					"sheetId": sheetId2,
-					"startRowIndex": lineRow-1,
-					"endRowIndex": lineRow,
-					"startColumnIndex": 6,
-					"endColumnIndex": 7
-				},
-				"pasteType": "PASTE_FORMULA"
-			}
-		},
-		{
-			"copyPaste": {
-				"source": {
-					"sheetId": sheetId2,
-					"startRowIndex": 3,
-					"endRowIndex": 4,
-					"startColumnIndex": 8,
-					"endColumnIndex": 9
-				},
-				"destination": {
-					"sheetId": sheetId2,
-					"startRowIndex": lineRow-1,
-					"endRowIndex": lineRow,
-					"startColumnIndex": 8,
-					"endColumnIndex": 9
-				},
-				"pasteType": "PASTE_FORMULA"
-			}
-		},
-		{
-			"copyPaste": {
-				"source": {
-					"sheetId": sheetId2,
-					"startRowIndex": 3,
-					"endRowIndex": 4,
-					"startColumnIndex": 13,
-					"endColumnIndex": 14
-				},
-				"destination": {
-					"sheetId": sheetId2,
-					"startRowIndex": lineRow-1,
-					"endRowIndex": lineRow,
-					"startColumnIndex": 13,
-					"endColumnIndex": 14
-				},
-				"pasteType": "PASTE_FORMULA"
-			}
-		},
-		{
-			"copyPaste": {
-				"source": {
-					"sheetId": sheetId2,
-					"startRowIndex": 3,
-					"endRowIndex": 4,
-					"startColumnIndex": 15,
-					"endColumnIndex": 16
-				},
-				"destination": {
-					"sheetId": sheetId2,
-					"startRowIndex": lineRow-1,
-					"endRowIndex": lineRow,
-					"startColumnIndex": 15,
-					"endColumnIndex": 16
-				},
-				"pasteType": "PASTE_FORMULA"
+		# Copy Formating and Formualas From Row 1
+		body = {"requests": [
+			{
+				"copyPaste": {
+					"source": {
+						"sheetId": sheetId2,
+						"startRowIndex": 3,
+						"endRowIndex": 4,
+						"startColumnIndex": 0,
+						"endColumnIndex": 20
+					},
+					"destination": {
+						"sheetId": sheetId2,
+						"startRowIndex": lineRow-1,
+						"endRowIndex": lineRow,
+						"startColumnIndex": 0,
+						"endColumnIndex": 20
+					},
+					"pasteType": "PASTE_FORMAT"
 				}
-		}]}
+			},
+			{
+				"copyPaste": {
+					"source": {
+						"sheetId": sheetId2,
+						"startRowIndex": 3,
+						"endRowIndex": 4,
+						"startColumnIndex": 6,
+						"endColumnIndex": 7
+					},
+					"destination": {
+						"sheetId": sheetId2,
+						"startRowIndex": lineRow-1,
+						"endRowIndex": lineRow,
+						"startColumnIndex": 6,
+						"endColumnIndex": 7
+					},
+					"pasteType": "PASTE_FORMULA"
+				}
+			},
+			{
+				"copyPaste": {
+					"source": {
+						"sheetId": sheetId2,
+						"startRowIndex": 3,
+						"endRowIndex": 4,
+						"startColumnIndex": 8,
+						"endColumnIndex": 9
+					},
+					"destination": {
+						"sheetId": sheetId2,
+						"startRowIndex": lineRow-1,
+						"endRowIndex": lineRow,
+						"startColumnIndex": 8,
+						"endColumnIndex": 9
+					},
+					"pasteType": "PASTE_FORMULA"
+				}
+			},
+			{
+				"copyPaste": {
+					"source": {
+						"sheetId": sheetId2,
+						"startRowIndex": 3,
+						"endRowIndex": 4,
+						"startColumnIndex": 13,
+						"endColumnIndex": 14
+					},
+					"destination": {
+						"sheetId": sheetId2,
+						"startRowIndex": lineRow-1,
+						"endRowIndex": lineRow,
+						"startColumnIndex": 13,
+						"endColumnIndex": 14
+					},
+					"pasteType": "PASTE_FORMULA"
+				}
+			},
+			{
+				"copyPaste": {
+					"source": {
+						"sheetId": sheetId2,
+						"startRowIndex": 3,
+						"endRowIndex": 4,
+						"startColumnIndex": 15,
+						"endColumnIndex": 16
+					},
+					"destination": {
+						"sheetId": sheetId2,
+						"startRowIndex": lineRow-1,
+						"endRowIndex": lineRow,
+						"startColumnIndex": 15,
+						"endColumnIndex": 16
+					},
+					"pasteType": "PASTE_FORMULA"
+					}
+			}]}
 		result = sheet.batchUpdate(spreadsheetId=C.REG_ID, body=body).execute()
 
-		return [f'{lineId}', '']
+		return [f'{lineId}', '', '']
 
 	except HttpError as err:
-		return ['', str(err)]
+		if err.resp.reason == 'Too Many Requests':
+			return ['', '. Превышен лимит запросов, подождите 60 секунд', str(err)]
+		return ['', '', str(err)]
 	
 	
 

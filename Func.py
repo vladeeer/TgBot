@@ -15,8 +15,8 @@ def message_responses(input_text, user_name, credentials = None, userId = 0):
 		if not error:
 			resp[0] = "Перечень файлов обновлён"
 		else:
-			resp[0] = "Не удалось обновить перечень файлов"
-			resp[1] = error
+			resp[0] = f"Не удалось обновить перечень файлов{error[0]}"
+			resp[1] = error[1]
 
 	elif(lookFor(['select'], user_message)):
 		inp = user_message.split()
@@ -27,7 +27,7 @@ def message_responses(input_text, user_name, credentials = None, userId = 0):
 		else:
 			result = Sheets.getLineById(credentials, inp[1], userId)
 			if not result[2]:
-				resp[0] = f"Выделена строка {inp[1]} ({result[1]})"
+				resp[0] = f"Выделена строка id:{inp[1]} ({result[1]})"
 			else:
 				resp[0] = f"Не удалось выделить строку. {result[1]}"
 				resp[1] = f'Failed to get a line by id. {result[2]}'
@@ -39,14 +39,22 @@ def message_responses(input_text, user_name, credentials = None, userId = 0):
 			resp[1] = f'Failed to add a line. Invalid syntax'
 		else:
 			res = Sheets.addRow(credentials, int(inp[1]))
-			if not res[1]:
-				resp[0] = f'Создана строка {res[0]}'
+			if not res[1] and not res[2]:
+				resp[0] = f'Создана строка id:{res[0]}'
 				resp2 = message_responses(f"select {res[0]}", user_name, credentials, userId)
 				resp[0] = f'{resp[0]}. {resp2[0]}'
 				resp[1] = f'{resp[1]}{resp2[1]}'
 			else:
-				resp[0] = f"Не удалось добавить строку"
-				resp[1] = f'Failed to add line. {res[1]}'
+				resp[0] = f"Не удалось добавить строку {res[1]}"
+				resp[1] = f'Failed to add line. {res[2]}'
+
+	elif(lookFor(['id'], user_message)):
+		res = Sheets.getUserData(credentials, userId)
+		if not res[1] and not res[2]:
+			resp[0] = f"Выделена строка id:{res[0][5]} ({res[0][3]}!{res[0][4]})"
+		else:
+			resp[0] = f"Не удалось определить выделенную строку {res[1]}"
+			resp[1] = res[2]
 
 	if (not resp[0]) and (not resp[1]):
 		resp[0] = "Команда не распознана, используйте /help для списка допустимых команд"
