@@ -1,3 +1,4 @@
+from math import fabs, factorial
 import random
 from datetime import datetime
 
@@ -25,12 +26,12 @@ def message_responses(input_text, user_name, credentials = None, userId = 0):
 			resp[0] = f"Не удалось выделить строку. Допущена ошибка в команде"
 			resp[1] = f'Failed to get a line by id. Invalid syntax'
 		else:
-			result = Sheets.getLineById(credentials, inp[1], userId)
-			if not result[2]:
-				resp[0] = f"Выделена строка id:{inp[1]} ({result[1]})"
+			res = Sheets.getLineById(credentials, inp[1], userId)
+			if not res[2]: 
+				resp[0] = f"Выделена строка id:{inp[1]} ({res[1]})"
 			else:
-				resp[0] = f"Не удалось выделить строку. {result[1]}"
-				resp[1] = f'Failed to get a line by id. {result[2]}'
+				resp[0] = f"Не удалось выделить строку{res[1]}"
+				resp[1] = f'Failed to get a line by id. {res[2]}'
 
 	elif(lookFor(['add'], user_message)):
 		inp = user_message.split()
@@ -45,7 +46,7 @@ def message_responses(input_text, user_name, credentials = None, userId = 0):
 				resp[0] = f'{resp[0]}. {resp2[0]}'
 				resp[1] = f'{resp[1]}{resp2[1]}'
 			else:
-				resp[0] = f"Не удалось добавить строку {res[1]}"
+				resp[0] = f"Не удалось добавить строку{res[1]}"
 				resp[1] = f'Failed to add line. {res[2]}'
 
 	elif(lookFor(['id'], user_message)):
@@ -53,7 +54,32 @@ def message_responses(input_text, user_name, credentials = None, userId = 0):
 		if not res[1] and not res[2]:
 			resp[0] = f"Выделена строка id:{res[0][5]} ({res[0][3]}!{res[0][4]})"
 		else:
-			resp[0] = f"Не удалось определить выделенную строку {res[1]}"
+			resp[0] = f"Не удалось определить выделенную строку{res[1]}"
+			resp[1] = res[2]
+
+	elif(lookFor(['get'], user_message)):
+		res = Sheets.getRow(credentials, userId)
+		if not res[1] and not res[2]:
+			print(res[0])
+			resp[0] = (f"Отм: {res[0][0]}\n"
+					   f"Дата: {res[0][1]}\n"
+					   f"Имя файла: {res[0][2]}\n"
+					   f"Контрагент: {res[0][3]}\n"
+					   f"Сумма: {res[0][4]}\n"
+					   f"Плательщик : {res[0][6]} {res[0][5]}\n"
+					   f"Налогооблажение: {res[0][8]} {res[0][7]}\n"
+					   f"Назначение: {res[0][9]}\n"
+					   f"№ счёта: {res[0][10]}\n"
+					   f"Дата документа: {res[0][11]}\n"
+					   f"Объект списания: {res[0][13]} {res[0][12]}\n"
+					   f"Статья расходов: {res[0][15]} {res[0][14]}\n"
+					   f"Дата реестра: {res[0][16]}\n"
+					   f"Ответственный: {res[0][17]}\n"
+					   f"Id: {res[0][18]}\n"
+					   f"Ссылка: {res[0][19]}\n")
+			print(resp[0])
+		else:
+			resp[0] = f"Не удалось получить выделенную строку{res[1]}"
 			resp[1] = res[2]
 
 	if (not resp[0]) and (not resp[1]):

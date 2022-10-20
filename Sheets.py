@@ -1,3 +1,4 @@
+from wsgiref import validate
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
@@ -27,8 +28,7 @@ def fetchFiles(credentials):
 		while True:
 			response = driveSrvc.files().list(q=f"parents in '{folder_id}'",
 											  spaces='drive',
-											  fields='nextPageToken, '
-											  'files(id, name, size, modifiedTime, webViewLink)',
+											  fields='nextPageToken, files(id, name, size, modifiedTime, webViewLink)',
 											  pageToken=page_token).execute()
 			for file in response.get('files', []):
 				#print(f' - {file.get("name")}, {file.get("id")}, {str(int(int(file.get("size"))/1024))}kb, {file.get("modifiedTime")[0:10]}, {file.get("webViewLink")}')
@@ -82,10 +82,17 @@ def getLineById(credentials, id, userId = 0, sheet = None):
 		for i in range(0, len(names)):  # TODO Use BatchGet
 			result = sheet.values().get(spreadsheetId=C.REG_ID, 
 										range=f"'{names[i]}'!S4:S",
+										valueRenderOption='FORMATTED_VALUE',
 										fields='values').execute()
 			if not result.get('values'):
 				continue
-			array = [i[0] for i in result.get('values') if len(i)]
+			array = result.get('values')
+			for j in range(0, len(array)):
+				if not len(array[j]):
+					array[j] = '0'
+				else:
+					array[j] = array[j][0]
+			print(array)
 			try:
 				foundRow = 3 + 1 + array.index(id)
 				foundSheet = names[i]
@@ -94,7 +101,7 @@ def getLineById(credentials, id, userId = 0, sheet = None):
 				continue
 		
 		if foundRow == -1:
-			return [{'sheet':'', 'row':0, 'id':0}, f'Строка с номером {id} не найдена', ' ']
+			return [{'sheet':'', 'row':0, 'id':0}, f'. Строка с номером {id} не найдена', ' ']
 
 		# Return if no User Specified else write selection to USERS_ID
 		if (userId == 0):
@@ -107,7 +114,7 @@ def getLineById(credentials, id, userId = 0, sheet = None):
 			return [{'sheet':'', 'row':0, 'id':0}, '', f'{res[1]}']
 
 		if not userRow:
-			return [{'sheet':'', 'row':0, 'id':0}, 'Недостаточно прав для доступа', f'Попытка доступа {userId}']
+			return [{'sheet':'', 'row':0, 'id':0}, '. Недостаточно прав для доступа', f'Попытка доступа {userId}']
 		
 		# Update Users Sheet
 		userData = [[f'\'\'{foundSheet}\'', foundRow, str(id)]]
@@ -119,7 +126,7 @@ def getLineById(credentials, id, userId = 0, sheet = None):
 
 	except HttpError as err:
 		if err.resp.reason == 'Too Many Requests':
-			return [{'sheet':'', 'row':0, 'id':0}, 'Превышен лимит запросов, подождите 60 секунд', str(err)]
+			return [{'sheet':'', 'row':0, 'id':0}, '. Превышен лимит запросов, подождите 60 секунд', str(err)]
 		return [{'sheet':'', 'row':0, 'id':0}, '', str(err)]
 
 def getUserRow(credentials, userId, sheet = None):
@@ -138,20 +145,20 @@ def getUserRow(credentials, userId, sheet = None):
 		try:
 			userRow = 1 + 1 + array.index(str(userId))
 		except ValueError:
-			return [None, '', '']
+			return [None, '. Пользователь не найден', '']
 
 		return [userRow, '', '']
 
 	except HttpError as err:
 		if err.resp.reason == 'Too Many Requests':
-			return [None, 'Превышен лимит запросов, подождите 60 секунд', str(err)]
+			return [None, '. Превышен лимит запросов, подождите 60 секунд', str(err)]
 		return [None, '', str(err)]
 
 def getUserData(credentials, userId, sheet = None):
 	try:
 		# Get Sheets Service
 		if not sheet:
-				sheet = build('sheets', 'v4', credentials=credentials).spreadsheets()
+			sheet = build('sheets', 'v4', credentials=credentials).spreadsheets()
 
 		# Get User Row
 		res = getUserRow(credentials, userId, sheet)
@@ -160,21 +167,20 @@ def getUserData(credentials, userId, sheet = None):
 			return [None, res[1], res[2]]
 
 		if not userRow:
-			return [None, '', '']
+			return [None, '. Пользователь не найден', '']
 
 		# Get User's Line
 		result = sheet.values().get(spreadsheetId=C.USERS_ID, 
 									range=f"A{userRow}:F{userRow}",
 									fields='values').execute()
 		if not result.get('values'):
-			return [None, 'No Users In Users Sheet', '']
+			return [None, '. Пользователь не найден', '']
 
-		print(result.get('values')[0])
 		return [result.get('values')[0], '', '']
 
 	except HttpError as err:
 		if err.resp.reason == 'Too Many Requests':
-			return [None, 'Превышен лимит запросов, подождите 60 секунд', str(err)]
+			return [None, '. Превышен лимит запросов, подождите 60 секунд', str(err)]
 		return [None, '', str(err)]
 
 def getFreeId(credentials, sheet = None):
@@ -215,7 +221,7 @@ def getFreeId(credentials, sheet = None):
 
 	except HttpError as err:
 		if err.resp.reason == 'Too Many Requests':
-			return [None, 'Превышен лимит запросов, подождите 60 секунд', str(err)]
+			return [None, '. Превышен лимит запросов, подождите 60 секунд', str(err)]
 		return [None, '', str(err)]
 
 def addRow(credentials, sheetId, sheet = None):
@@ -231,7 +237,6 @@ def addRow(credentials, sheetId, sheet = None):
 		sheetIds2 = [result.get('sheets')[i].get('properties').get('sheetId') for i in range(1, len(result.get('sheets')))]  
 		name = names[sheetId-1]
 		sheetId2 = sheetIds2[sheetId-1]
-		
 
 		# Get New Id
 		res = getFreeId(credentials, sheet)
@@ -242,8 +247,10 @@ def addRow(credentials, sheetId, sheet = None):
 		# Get Next Row
 		result = sheet.values().get(spreadsheetId=C.REG_ID,
 									range=f"'{name}'!S4:S",
+									valueRenderOption='FORMATTED_VALUE',
 									fields='values').execute()
 		lineRow = 4 + len(result.get('values'))
+		print(lineRow)
 
 
 		# Get Next Line
@@ -251,28 +258,6 @@ def addRow(credentials, sheetId, sheet = None):
 		sheet.values().update(spreadsheetId=C.REG_ID, range=f"'{name}'!A{lineRow}:T{lineRow}", 
 							  valueInputOption='USER_ENTERED',
 							  body={'values': [lineData]}).execute()
-
-		# Copy Formating From Row 1
-		body = {"requests": [{
-			"copyPaste": {
-				"source": {
-					"sheetId": sheetId2,
-					"startRowIndex": 3,
-					"endRowIndex": 4,
-					"startColumnIndex": 0,
-					"endColumnIndex": 20
-				},
-				"destination": {
-					"sheetId": sheetId2,
-					"startRowIndex": lineRow-1,
-					"endRowIndex": lineRow,
-					"startColumnIndex": 0,
-					"endColumnIndex": 20
-				},
-				"pasteType": "PASTE_FORMAT"
-			}
-		}]}
-		result = sheet.batchUpdate(spreadsheetId=C.REG_ID, body=body).execute()
 
 		# Copy Formating and Formualas From Row 1
 		body = {"requests": [
@@ -380,7 +365,49 @@ def addRow(credentials, sheetId, sheet = None):
 			return ['', '. Превышен лимит запросов, подождите 60 секунд', str(err)]
 		return ['', '', str(err)]
 	
-	
+def getRow(credentials, userId, sheet = None):
+	try:
+		# Get Sheets Service
+		if not sheet:
+			sheet = build('sheets', 'v4', credentials=credentials).spreadsheets()
+
+		# Get User Row
+		res = getUserRow(credentials, userId, sheet)
+		userRow = res[0]
+		if res[1] or res[2]:
+			return [None, res[1], res[2]]
+
+		if not userRow:
+			return [None, '. Пользователь не найден', '']
+
+		# Get User's Line
+		result = sheet.values().get(spreadsheetId=C.USERS_ID, 
+									range=f"A{userRow}:F{userRow}",
+									fields='values').execute()
+		if not result.get('values'):
+			return [None, '. Пользователь не найден', '']
+
+		regSheet = result.get('values')[0][3]
+		regRow = result.get('values')[0][4]
+
+		result = sheet.values().get(spreadsheetId=C.REG_ID, 
+									range=f"{regSheet}!A{regRow}:T{regRow}",
+									valueRenderOption='FORMATTED_VALUE',
+									fields='values').execute()
+
+		if not result.get('values'):
+			return [None, '. Строка пользователя пуста (Происходить не должно!!!)', '']
+
+		values = result.get('values')[0]
+		while len(values) < 20:
+			values.append('')
+
+		return [values, '', '']
+
+	except HttpError as err:
+		if err.resp.reason == 'Too Many Requests':
+			return [None, '. Превышен лимит запросов, подождите 60 секунд', str(err)]
+		return [None, '', str(err)]
 
 
 
