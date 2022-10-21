@@ -560,3 +560,102 @@ def prevRow(credentials, userId, sheet = None):
 		if err.resp.reason == 'Too Many Requests':
 			return [{'sheet':'', 'row':0, 'id':0}, '. Превышен лимит запросов, подождите 60 секунд', str(err)]
 		return [{'sheet':'', 'row':0, 'id':0}, '', str(err)]
+
+def getField(credentials, userId, fieldStr, sheet = None):
+	try:
+		# Get Sheets Service
+		if not sheet:
+			sheet = build('sheets', 'v4', credentials=credentials).spreadsheets()
+
+		# Get User Row
+		res = getUserData(credentials, userId, sheet)
+		userRow = res[0]
+		if res[1] or res[2]:
+			return [None, res[1], res[2]]
+
+		# Get User Line
+		userPos = int(userRow[1])
+		regSheet = userRow[3]
+		regRow = userRow[4]
+
+		res = getColIndex(fieldStr, userPos)
+		col = res[0].get('col')
+		if res[1]:
+			return [None, res[1], '']
+
+		result = sheet.values().get(spreadsheetId=C.REG_ID, 
+									range=f'{regSheet}!{col}{regRow}',
+									valueRenderOption='FORMATTED_VALUE',
+									fields='values').execute()
+		if not result.get('values'):
+			return ['', '', '']
+
+		return [result.get('values')[0][0], '', '']
+
+	except HttpError as err:
+		if err.resp.reason == 'Too Many Requests':
+			return [None, '. Превышен лимит запросов, подождите 60 секунд', str(err)]
+		return [None, '', str(err)]
+
+def setField(credentials, userId, fieldStr, fieldValue, sheet = None):
+	try:
+		# Get Sheets Service
+		if not sheet:
+			sheet = build('sheets', 'v4', credentials=credentials).spreadsheets()
+
+		# Get User Row
+		res = getUserData(credentials, userId, sheet)
+		userRow = res[0]
+		if res[1] or res[2]:
+			return [None, res[1], res[2]]
+
+		# Get User Line
+		userPos = int(userRow[1])
+		regSheet = userRow[3]
+		regRow = userRow[4]
+
+		res = getColIndex(fieldStr, userPos)
+		col = res[0].get('col')
+		isInt = res[0].get('isInt')
+		if res[1]:
+			return [None, res[1], '']
+
+		if isInt and not fieldValue.isdigit():
+			return [None, '. Выбранное поле должно иметь численное значение', '']
+
+		sheet.values().update(spreadsheetId=C.REG_ID, range=f'{regSheet}!{col}{regRow}', 
+							  valueInputOption='USER_ENTERED',
+							  body={'values': [[fieldValue]]}).execute()
+
+		return [None, '', '']
+
+	except HttpError as err:
+		if err.resp.reason == 'Too Many Requests':
+			return [None, '. Превышен лимит запросов, подождите 60 секунд', str(err)]
+		return [None, '', str(err)]
+
+def getColIndex(fieldStr, userPos):
+	if userPos == 1 and fieldStr == 'f1':
+		return [{'col':'J', 'isInt':False}, ''] # Описание
+	elif userPos == 1 and fieldStr == 'f2':
+		return [{'col':'R', 'isInt':False}, ''] # Ответственный
+	elif userPos == 1 and fieldStr == 'f3':
+		return [{'col':'M', 'isInt':True}, '']  # Объект списания
+	elif userPos == 1 and fieldStr == 'f4':
+		return [{'col':'O', 'isInt':True}, '']  # Статья расходов
+	elif userPos == 1 and fieldStr == 'f5':
+		return [{'col':'E', 'isInt':True}, '']  # Сумма
+	elif userPos == 2 and fieldStr == 'f1':
+		return [{'col':'F', 'isInt':True}, '']  # Плательщик
+	elif userPos == 2 and fieldStr == 'f2':
+		return [{'col':'H', 'isInt':True}, '']  # Налогооблажение
+	elif userPos == 2 and fieldStr == 'f3':
+		return [{'col':'Q', 'isInt':False}, ''] # Дата реестра
+	elif userPos == 3 and fieldStr == 'f1':
+		return [{'col':'K', 'isInt':True}, '']  # № счёта
+	elif userPos == 3 and fieldStr == 'f2':
+		return [{'col':'L', 'isInt':False}, ''] # Дата документа
+	elif userPos == 3 and fieldStr == 'f3':
+		return [{'col':'D', 'isInt':False}, ''] # Контрагент
+	else:
+		return [{'col':'', 'isInt':False}, '. Указано неверное поле']

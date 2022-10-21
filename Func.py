@@ -126,31 +126,50 @@ def message_responses(input_text, user_name, credentials = None, userId = 0):
 	
 	elif(user_message.lower() == 'f'):
 		resp[0] = """Шпаргалка по номерам (#) полей:
-			User1: 1-Описание, 2-Ответственный(№), 
+			User1: 1-Описание, 2-Ответственный, 
 		3-Объект(№), 4-Статья расходов(№), 
 		5-Сумма
 			User2: 1-Плательщик(№), 2-Налоги(№), 
 		3-Дата реестра
 			User3: 1-№ счёта, 2-Дата документа, 
-		3-Контрагент(№)"""
+		3-Контрагент"""
 
 	elif(lookFor(['f1', 'f2', 'f3', 'f4', 'f5'], user_message)):
 		msg = user_message.split()
-		if (len(msg) < 2):
-			resp[0] = f'Не удалось добавить файл. Допущена ошибка в команде'
+		msg[0] = msg[0].lower()
+		if (len(msg) == 1):
+			# Get Field Value
+			if not msg[0] in ['f1', 'f2', 'f3', 'f4', 'f5']:
+				resp[0] = f'Не удалось получить поле. Допущена ошибка в команде'				
+			else:
+				res = Sheets.getField(credentials, userId, msg[0])
+				if not res[1] and not res[2]:
+					if not res[0]:
+						resp[0] = f'Пустое поле'
+					else:
+						resp[0] = f'Значение поля: {res[0]}'
+				else:
+					resp[0] = f'Не удалось получить поле{res[1]}'
+					if res[2]:
+						resp[1] = f'Failed to add line. {res[2]}'
+
 		else:
-			inp = [msg[0], msg[1]]
+			# Set Field Value
+			inp = [msg[0], msg[1]] 
 			if len(msg) > 2:
 				for word in msg[2:]:
 					inp[1] = inp[1] + ' ' + word
 
-			res = Sheets.addFile(credentials, userId, inp[1])
-			if not res[1] and not res[2]:
-				resp[0] = f'Добавлен файл {inp[1]}'
+			if not msg[0] in ['f1', 'f2', 'f3', 'f4', 'f5']:
+				resp[0] = f'Не удалось записать поле. Допущена ошибка в команде'
 			else:
-				resp[0] = f'Не удалось добавить файл{res[1]}'
-				if res[2]:
-					resp[1] = f'Failed to add line. {res[2]}'
+				res = Sheets.setField(credentials, userId, msg[0], inp[1])
+				if not res[1] and not res[2]:
+					resp[0] = f'Значение поля записано'
+				else:
+					resp[0] = f'Не удалось записать значение{res[1]}'
+					if res[2]:
+						resp[1] = f'Failed to add line. {res[2]}'
 
 	if (not resp[0]) and (not resp[1]):
 		resp[0] = 'Команда не распознана, используйте /help для списка допустимых команд'
