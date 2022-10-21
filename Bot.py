@@ -33,12 +33,15 @@ def help_command(update, context):
 
 def handle_message(update, context):
 	if (update.message != None and update.message.from_user.id in C.VALID_IDS):
-		text=str(update.message.text).lower()
+		text=str(update.message.text)
 		log_message(update.message.from_user.first_name, update.message.text, False)
 
 		resp = F.message_responses(text, update.message.from_user.first_name, googleCredentials, update.message.from_user.id)
 		if resp[0]:
-			log_message("Bot", resp[0], False)
+			if len(resp[0]) > 100:
+				log_message("Bot", f'{resp[0][0:100]}...', False)
+			else:
+				log_message("Bot", resp[0], False)
 			update.message.reply_text(resp[0])
 		if resp[1]:
 			log_message("[Server]", resp[1])	

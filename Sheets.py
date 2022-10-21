@@ -1,3 +1,4 @@
+from fileinput import filename
 from wsgiref import validate
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -18,7 +19,7 @@ def fetchFiles(credentials):
 										  spaces='drive',
 										  fields='files(id)').execute()
 		if len(response.get('files')) == 0:
-			return "Не найден каталог с файлами"
+			return ['Не найден каталог с файлами', '']
 		folder = response.get('files')[0]
 		folder_id = folder.get('id')
 
@@ -41,7 +42,7 @@ def fetchFiles(credentials):
 		result = sheet.get(spreadsheetId=C.FILES_ID,
 						   fields='sheets(properties(title,gridProperties(rowCount)))').execute()
 		properties = result.get('sheets')[0].get('properties')
-		nRows = properties.get("gridProperties").get("rowCount")
+		nRows = properties.get('gridProperties').get('rowCount')
 		sheetRange = properties.get('title')
 
 		# Clear Table
@@ -92,7 +93,7 @@ def getLineById(credentials, id, userId = 0, sheet = None):
 					array[j] = '0'
 				else:
 					array[j] = array[j][0]
-			print(array)
+
 			try:
 				foundRow = 3 + 1 + array.index(id)
 				foundSheet = names[i]
@@ -114,11 +115,11 @@ def getLineById(credentials, id, userId = 0, sheet = None):
 			return [{'sheet':'', 'row':0, 'id':0}, '', f'{res[1]}']
 
 		if not userRow:
-			return [{'sheet':'', 'row':0, 'id':0}, '. Недостаточно прав для доступа', f'Попытка доступа {userId}']
+			return [{'sheet':'', 'row':0, 'id':0}, '. Недостаточно прав для доступа', f'Denied access {userId}']
 		
 		# Update Users Sheet
 		userData = [[f'\'\'{foundSheet}\'', foundRow, str(id)]]
-		sheet.values().update(spreadsheetId=C.USERS_ID, range=f'D2:F2', 
+		sheet.values().update(spreadsheetId=C.USERS_ID, range=f'D{userRow}:F{userRow}', 
 							  valueInputOption='USER_ENTERED',
 							  body={'values': userData}).execute()
 
@@ -133,17 +134,15 @@ def getUserRow(credentials, userId, sheet = None):
 	try:
 		# Get Sheets Service
 		if not sheet:
-				sheet = build('sheets', 'v4', credentials=credentials).spreadsheets()
+			sheet = build('sheets', 'v4', credentials=credentials).spreadsheets()
 
 		# Find Current User's Line
-		userRow = -1
-
 		result = sheet.values().get(spreadsheetId=C.USERS_ID, 
-										range="A2:A",
+										range='A2:A',
 										fields='values').execute()
 		array = [i[0] for i in result.get('values')]
 		try:
-			userRow = 1 + 1 + array.index(str(userId))
+			userRow = 2 + array.index(str(userId))
 		except ValueError:
 			return [None, '. Пользователь не найден', '']
 
@@ -249,9 +248,16 @@ def addRow(credentials, sheetId, sheet = None):
 									range=f"'{name}'!S4:S",
 									valueRenderOption='FORMATTED_VALUE',
 									fields='values').execute()
-		lineRow = 4 + len(result.get('values'))
-		print(lineRow)
 
+		lineRow = 0
+		values =result.get('values')
+		for j in range(0, len(values)):
+				if not len(values[j]):
+					lineRow = 4 + j
+					break
+		
+		if lineRow == 0:
+			lineRow = 4 + len(values)
 
 		# Get Next Line
 		lineData = ['']*20; lineData[18] = lineId
@@ -260,100 +266,100 @@ def addRow(credentials, sheetId, sheet = None):
 							  body={'values': [lineData]}).execute()
 
 		# Copy Formating and Formualas From Row 1
-		body = {"requests": [
+		body = {'requests': [
 			{
-				"copyPaste": {
-					"source": {
-						"sheetId": sheetId2,
-						"startRowIndex": 3,
-						"endRowIndex": 4,
-						"startColumnIndex": 0,
-						"endColumnIndex": 20
+				'copyPaste': {
+					'source': {
+						'sheetId': sheetId2,
+						'startRowIndex': 3,
+						'endRowIndex': 4,
+						'startColumnIndex': 0,
+						'endColumnIndex': 20
 					},
-					"destination": {
-						"sheetId": sheetId2,
-						"startRowIndex": lineRow-1,
-						"endRowIndex": lineRow,
-						"startColumnIndex": 0,
-						"endColumnIndex": 20
+					'destination': {
+						'sheetId': sheetId2,
+						'startRowIndex': lineRow-1,
+						'endRowIndex': lineRow,
+						'startColumnIndex': 0,
+						'endColumnIndex': 20
 					},
-					"pasteType": "PASTE_FORMAT"
+					'pasteType': 'PASTE_FORMAT'
 				}
 			},
 			{
-				"copyPaste": {
-					"source": {
-						"sheetId": sheetId2,
-						"startRowIndex": 3,
-						"endRowIndex": 4,
-						"startColumnIndex": 6,
-						"endColumnIndex": 7
+				'copyPaste': {
+					'source': {
+						'sheetId': sheetId2,
+						'startRowIndex': 3,
+						'endRowIndex': 4,
+						'startColumnIndex': 6,
+						'endColumnIndex': 7
 					},
-					"destination": {
-						"sheetId": sheetId2,
-						"startRowIndex": lineRow-1,
-						"endRowIndex": lineRow,
-						"startColumnIndex": 6,
-						"endColumnIndex": 7
+					'destination': {
+						'sheetId': sheetId2,
+						'startRowIndex': lineRow-1,
+						'endRowIndex': lineRow,
+						'startColumnIndex': 6,
+						'endColumnIndex': 7
 					},
-					"pasteType": "PASTE_FORMULA"
+					'pasteType': 'PASTE_FORMULA'
 				}
 			},
 			{
-				"copyPaste": {
-					"source": {
-						"sheetId": sheetId2,
-						"startRowIndex": 3,
-						"endRowIndex": 4,
-						"startColumnIndex": 8,
-						"endColumnIndex": 9
+				'copyPaste': {
+					'source': {
+						'sheetId': sheetId2,
+						'startRowIndex': 3,
+						'endRowIndex': 4,
+						'startColumnIndex': 8,
+						'endColumnIndex': 9
 					},
-					"destination": {
-						"sheetId": sheetId2,
-						"startRowIndex": lineRow-1,
-						"endRowIndex": lineRow,
-						"startColumnIndex": 8,
-						"endColumnIndex": 9
+					'destination': {
+						'sheetId': sheetId2,
+						'startRowIndex': lineRow-1,
+						'endRowIndex': lineRow,
+						'startColumnIndex': 8,
+						'endColumnIndex': 9
 					},
-					"pasteType": "PASTE_FORMULA"
+					'pasteType': 'PASTE_FORMULA'
 				}
 			},
 			{
-				"copyPaste": {
-					"source": {
-						"sheetId": sheetId2,
-						"startRowIndex": 3,
-						"endRowIndex": 4,
-						"startColumnIndex": 13,
-						"endColumnIndex": 14
+				'copyPaste': {
+					'source': {
+						'sheetId': sheetId2,
+						'startRowIndex': 3,
+						'endRowIndex': 4,
+						'startColumnIndex': 13,
+						'endColumnIndex': 14
 					},
-					"destination": {
-						"sheetId": sheetId2,
-						"startRowIndex": lineRow-1,
-						"endRowIndex": lineRow,
-						"startColumnIndex": 13,
-						"endColumnIndex": 14
+					'destination': {
+						'sheetId': sheetId2,
+						'startRowIndex': lineRow-1,
+						'endRowIndex': lineRow,
+						'startColumnIndex': 13,
+						'endColumnIndex': 14
 					},
-					"pasteType": "PASTE_FORMULA"
+					'pasteType': 'PASTE_FORMULA'
 				}
 			},
 			{
-				"copyPaste": {
-					"source": {
-						"sheetId": sheetId2,
-						"startRowIndex": 3,
-						"endRowIndex": 4,
-						"startColumnIndex": 15,
-						"endColumnIndex": 16
+				'copyPaste': {
+					'source': {
+						'sheetId': sheetId2,
+						'startRowIndex': 3,
+						'endRowIndex': 4,
+						'startColumnIndex': 15,
+						'endColumnIndex': 16
 					},
-					"destination": {
-						"sheetId": sheetId2,
-						"startRowIndex": lineRow-1,
-						"endRowIndex": lineRow,
-						"startColumnIndex": 15,
-						"endColumnIndex": 16
+					'destination': {
+						'sheetId': sheetId2,
+						'startRowIndex': lineRow-1,
+						'endRowIndex': lineRow,
+						'startColumnIndex': 15,
+						'endColumnIndex': 16
 					},
-					"pasteType": "PASTE_FORMULA"
+					'pasteType': 'PASTE_FORMULA'
 					}
 			}]}
 		result = sheet.batchUpdate(spreadsheetId=C.REG_ID, body=body).execute()
@@ -372,29 +378,19 @@ def getRow(credentials, userId, sheet = None):
 			sheet = build('sheets', 'v4', credentials=credentials).spreadsheets()
 
 		# Get User Row
-		res = getUserRow(credentials, userId, sheet)
+		res = getUserData(credentials, userId, sheet)
 		userRow = res[0]
 		if res[1] or res[2]:
 			return [None, res[1], res[2]]
 
-		if not userRow:
-			return [None, '. Пользователь не найден', '']
-
-		# Get User's Line
-		result = sheet.values().get(spreadsheetId=C.USERS_ID, 
-									range=f"A{userRow}:F{userRow}",
-									fields='values').execute()
-		if not result.get('values'):
-			return [None, '. Пользователь не найден', '']
-
-		regSheet = result.get('values')[0][3]
-		regRow = result.get('values')[0][4]
+		# Get User Line
+		regSheet = userRow[3]
+		regRow = userRow[4]
 
 		result = sheet.values().get(spreadsheetId=C.REG_ID, 
-									range=f"{regSheet}!A{regRow}:T{regRow}",
+									range=f'{regSheet}!A{regRow}:T{regRow}',
 									valueRenderOption='FORMATTED_VALUE',
 									fields='values').execute()
-
 		if not result.get('values'):
 			return [None, '. Строка пользователя пуста (Происходить не должно!!!)', '']
 
@@ -409,5 +405,158 @@ def getRow(credentials, userId, sheet = None):
 			return [None, '. Превышен лимит запросов, подождите 60 секунд', str(err)]
 		return [None, '', str(err)]
 
+def addFile(credentials, userId, fileName, sheet = None):
+	try:
+		# Get Sheets Service        ;
+		if not sheet:
+			sheet = build('sheets', 'v4', credentials=credentials).spreadsheets()
 
+		# Find File Row           
+		result = sheet.values().get(spreadsheetId=C.FILES_ID, 
+										range='A2:A',
+										fields='values').execute() 
+		array = [i[0] for i in result.get('values')]        
+		try:
+			fileRow = 2 + array.index(str(fileName))          
+		except ValueError:
+			return [None, '. Файл не найден', '']
 
+		result = sheet.values().get(spreadsheetId=C.FILES_ID, 
+										range=f'A{fileRow}:F{fileRow}',
+										fields='values').execute()
+		fileData = result.get('values')[0]					
+
+		# Get User Row
+		res = getUserData(credentials, userId, sheet)
+		userRow = res[0]									
+		if res[1] or res[2]:
+			return [None, res[1], res[2]]
+
+		# Get User Line
+		regSheet = userRow[3]
+		regRow = userRow[4]
+
+		# Update Name & Date
+		sheet.values().update(spreadsheetId=C.REG_ID, range=f'{regSheet}!B{regRow}:C{regRow}', 
+							  valueInputOption='USER_ENTERED',
+							  body={'values': [[fileData[2], fileData[0]]]}).execute()
+
+		# Update Link
+		sheet.values().update(spreadsheetId=C.REG_ID, range=f'{regSheet}!T{regRow}', 
+							  valueInputOption='USER_ENTERED',
+							  body={'values': [[fileData[4]]]}).execute()
+
+		return [None, '', '']
+
+	except HttpError as err:
+		if err.resp.reason == 'Too Many Requests':
+			return [None, '. Превышен лимит запросов, подождите 60 секунд', str(err)]
+		return [None, '', str(err)]
+
+def nextRow(credentials, userId, sheet = None):
+	try:
+		# Get Sheets Service
+		if not sheet:
+			sheet = build('sheets', 'v4', credentials=credentials).spreadsheets()
+
+		# Get User Data
+		res = getUserData(credentials, userId, sheet)
+		userRow = res[0]									
+		if res[1] or res[2]:
+			return [None, res[1], res[2]]
+
+		# Get User Line
+		regSheet = userRow[3]
+		regRow = int(userRow[4])
+
+		result = sheet.values().get(spreadsheetId=C.REG_ID, 
+									range=f"{regSheet}!S4:S",
+									valueRenderOption='FORMATTED_VALUE',
+									fields='values').execute()
+			
+		newRow = regRow
+		while True:
+			newRow = newRow + 1
+			if newRow - 3 <= len(result.get('values')):
+				if result.get('values')[newRow - 4] and (result.get('values')[newRow - 4][0].isdigit()):
+					break
+			else:
+				return [{'sheet':'', 'row':0, 'id':0}, f'. Достигнута последняя строка', '']
+
+		newId = result.get('values')[newRow - 4][0]
+
+		# Get User's Row
+		res = getUserRow(credentials, userId, sheet)
+		userRow = res[0]
+		if res[1]:
+			return [{'sheet':'', 'row':0, 'id':0}, '', f'{res[1]}']
+
+		if not userRow:
+			return [{'sheet':'', 'row':0, 'id':0}, '. Недостаточно прав для доступа', f'Denied access {userId}']
+		
+		# Update Users Sheet
+		userData = [[f'\'{regSheet}', str(newRow), newId]]
+		sheet.values().update(spreadsheetId=C.USERS_ID, range=f'D{userRow}:F{userRow}', 
+							  valueInputOption='USER_ENTERED',
+							  body={'values': userData}).execute()
+
+		return [{'sheet':regSheet, 'row':newRow, 'id':newId}, '', '']
+
+	except HttpError as err:
+		if err.resp.reason == 'Too Many Requests':
+			return [{'sheet':'', 'row':0, 'id':0}, '. Превышен лимит запросов, подождите 60 секунд', str(err)]
+		return [{'sheet':'', 'row':0, 'id':0}, '', str(err)]
+
+def prevRow(credentials, userId, sheet = None):
+	try:
+		# Get Sheets Service
+		if not sheet:
+			sheet = build('sheets', 'v4', credentials=credentials).spreadsheets()
+
+		# Get User Data
+		res = getUserData(credentials, userId, sheet)
+		userRow = res[0]									
+		if res[1] or res[2]:
+			return [None, res[1], res[2]]
+
+		# Get User Line
+		regSheet = userRow[3]
+		regRow = int(userRow[4])
+
+		result = sheet.values().get(spreadsheetId=C.REG_ID, 
+									range=f"{regSheet}!S4:S",
+									valueRenderOption='FORMATTED_VALUE',
+									fields='values').execute()
+			
+		newRow = regRow
+		while True:
+			newRow = newRow - 1
+			if newRow - 3 >= 1:
+				if result.get('values')[newRow - 4] and (result.get('values')[newRow - 4][0].isdigit()):
+					break
+			else:
+				return [{'sheet':'', 'row':0, 'id':0}, f'. Достигнута первая строка', '']
+
+		newId = result.get('values')[newRow - 4][0]
+
+		# Get User's Row
+		res = getUserRow(credentials, userId, sheet)
+		userRow = res[0]
+		if res[1]:
+			return [{'sheet':'', 'row':0, 'id':0}, '', f'{res[1]}']
+
+		if not userRow:
+			return [{'sheet':'', 'row':0, 'id':0}, '. Недостаточно прав для доступа', f'Denied access {userId}']
+		
+		# Update Users Sheet
+		userData = [[f'\'{regSheet}', str(newRow), newId]]
+		sheet.values().update(spreadsheetId=C.USERS_ID, range=f'D{userRow}:F{userRow}', 
+							  valueInputOption='USER_ENTERED',
+							  body={'values': userData}).execute()
+
+		return [{'sheet':regSheet, 'row':newRow, 'id':newId}, '', '']
+
+	except HttpError as err:
+		if err.resp.reason == 'Too Many Requests':
+			return [{'sheet':'', 'row':0, 'id':0}, '. Превышен лимит запросов, подождите 60 секунд', str(err)]
+		return [{'sheet':'', 'row':0, 'id':0}, '', str(err)]
